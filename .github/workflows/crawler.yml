@@ -31,10 +31,18 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Setup Edge
-      uses: browser-actions/setup-edge@latest
-      with:
-        edge-version: stable
+    - name: Setup Edge (PowerShell)
+      shell: pwsh
+      run: |
+        $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+        if (Test-Path $edgePath) {
+          $edgeVersion = (Get-Item $edgePath).VersionInfo.ProductVersion
+          Write-Host "Edge stable is already installed @ $edgePath"
+          Write-Host "Edge version: $edgeVersion"
+        } else {
+          Write-Host "Edge not found, installing..."
+          choco install microsoft-edge -y
+        }
 
     - name: Download Edge WebDriver
       shell: powershell

@@ -2,6 +2,8 @@ from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import random
 import time
 import re
@@ -36,13 +38,14 @@ if os.environ.get('CI'):
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-gpu')
 driver = webdriver.Edge(options=options)
+wait = WebDriverWait(driver, 15)
 
 
 for url in urls:
     driver.get(url)
     #爬取标题
     book_title_xpath = '/html/body/div[2]/div[3]/div[1]/h1'
-    book_title = driver.find_element(By.XPATH, book_title_xpath).text
+    book_title = wait.until(EC.presence_of_element_located((By.XPATH, book_title_xpath))).text
     #处理文件名中的特殊字符
     safe_title = sanitize_filename(book_title)
     #没有可爬取内容时结束任务
@@ -50,22 +53,21 @@ for url in urls:
         with open('novel/' + safe_title + '.txt', "w+", encoding='utf-8') as f:
             #进入轻小说开始页
             first_part_xpath = '/html/body/div[2]/div[3]/div[2]/div[2]/div/ul/li[1]/a'
-            begin_button = driver.find_element(By.XPATH, first_part_xpath)
+            begin_button = wait.until(EC.element_to_be_clickable((By.XPATH, first_part_xpath)))
             begin_button.click()
-            time.sleep(2)
             #开始爬取每页内容
             while True:
                 #爬取章节标题
                 part_title_xpath = '//*[@id="mlfy_main_text"]/h1'
-                part_title = driver.find_element(By.XPATH, part_title_xpath).text
+                part_title = wait.until(EC.presence_of_element_located((By.XPATH, part_title_xpath))).text
                 f.write('\n' + part_title + '\n\n')
                 #爬取章节内容
                 article_xpath='//*[@id="TextContent"]'
-                article=driver.find_element(By.XPATH,article_xpath).text
+                article = wait.until(EC.presence_of_element_located((By.XPATH, article_xpath))).text
                 f.write(process_text(article))
                 #进入下一页
                 next_part_xpath = '//*[@id="readbg"]/p/a[5]'
-                button = driver.find_element(By.XPATH, next_part_xpath)
+                button = wait.until(EC.element_to_be_clickable((By.XPATH, next_part_xpath)))
                 #随机等待,反爬虫
                 time.sleep(random.randint(0, 2))
                 button.click()

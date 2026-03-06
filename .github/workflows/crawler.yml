@@ -44,6 +44,16 @@ jobs:
           choco install microsoft-edge -y
         }
 
+    - name: Remove pre-installed old WebDriver
+      shell: pwsh
+      run: |
+        # GitHub Actions runner 预装的 msedgedriver 版本过旧，删除后让 Selenium Manager 自动下载匹配版本
+        $oldDriver = "C:\SeleniumWebDrivers\EdgeDriver"
+        if (Test-Path $oldDriver) {
+          Remove-Item -Recurse -Force $oldDriver
+          Write-Host "Removed old EdgeDriver from $oldDriver"
+        }
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip

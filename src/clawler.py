@@ -1,5 +1,5 @@
 from selenium import webdriver
-from selenium.common import NoSuchElementException
+from selenium.common import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -54,44 +54,77 @@ wait = WebDriverWait(driver, 30)
 for url in urls:
     driver.get(url)
     time.sleep(3)
-    # 调试：打印实际加载的页面信息
     print(f"Page URL: {driver.current_url}")
     print(f"Page title: {driver.title}")
-    #爬取标题
-    book_title_xpath = '/html/body/div[2]/div[3]/div[1]/h1'
+
+    #爬取书名 - 使用CSS选择器，更灵活
     try:
-        book_title = wait.until(EC.presence_of_element_located((By.XPATH, book_title_xpath))).text
-    except Exception:
-        print("Failed to find book title element. Page source (first 2000 chars):")
-        print(driver.page_source[:2000])
-        raise
-    #处理文件名中的特殊字符
+        book_title_el = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.book-title, h1')))
+        book_title = book_title_el.text.strip()
+    except TimeoutException:
+        print("无法获取书名，跳过此URL")
+        print(f"Page source (first 2000 chars): {driver.page_source[:2000]}")
+        continue
+
     safe_title = sanitize_filename(book_title)
-    #没有可爬取内容时结束任务
-    try:
-        with open('novel/' + safe_title + '.txt', "w+", encoding='utf-8') as f:
-            #进入轻小说开始页
-            first_part_xpath = '/html/body/div[2]/div[3]/div[2]/div[2]/div/ul/li[1]/a'
-            begin_button = wait.until(EC.element_to_be_clickable((By.XPATH, first_part_xpath)))
-            begin_button.click()
-            #开始爬取每页内容
-            while True:
+    print(f"书名: {book_title}")
+
+    #从目录页提取所有章节链接
+    chapter_links = []
+    # 提取小说ID用于匹配章节链接
+    novel_id_match = re.search(r'/novel/(\d+)', url)
+    if not novel_id_match:
+        print("无法从URL中提取小说ID，跳过")
+        continue
+    novel_id = novel_id_match.group(1)
+
+    all_links = driver.find_elements(By.CSS_SELECTOR, 'a[href]')
+    for link in all_links:
+        href = link.get_attribute('href') or ''
+        # 匹配章节链接: /novel/{id}/{chapter_id}.html (排除 vol_ 卷页和 catalog)
+        if re.search(rf'/novel/{novel_id}/\d+\.html$', href):
+            title = link.text.strip()
+            if title and href not in [c[1] for c in chapter_links]:
+                chapter_links.append((title, href))
+
+    print(f"共找到 {len(chapter_links)} 个章节")
+
+    if not chapter_links:
+        print("未找到任何章节链接，跳过")
+        continue
+
+    #爬取每个章节
+    with open('novel/' + safe_title + '.txt', "w+", encoding='utf-8') as f:
+        for i, (ch_title, ch_url) in enumerate(chapter_links):
+            try:
+                print(f"[{i+1}/{len(chapter_links)}] {ch_title}")
+                driver.get(ch_url)
+                time.sleep(random.randint(1, 3))
+
                 #爬取章节标题
-                part_title_xpath = '//*[@id="mlfy_main_text"]/h1'
-                part_title = wait.until(EC.presence_of_element_located((By.XPATH, part_title_xpath))).text
+                try:
+                    part_title = wait.until(EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, '#mlfy_main_text h1, .read-title, .chapter-title, h1')
+                    )).text
+                except TimeoutException:
+                    part_title = ch_title
                 f.write('\n' + part_title + '\n\n')
+
                 #爬取章节内容
-                article_xpath='//*[@id="TextContent"]'
-                article = wait.until(EC.presence_of_element_located((By.XPATH, article_xpath))).text
-                f.write(process_text(article))
-                #进入下一页
-                next_part_xpath = '//*[@id="readbg"]/p/a[5]'
-                button = wait.until(EC.element_to_be_clickable((By.XPATH, next_part_xpath)))
-                #随机等待,反爬虫
-                time.sleep(random.randint(0, 2))
-                button.click()
-                time.sleep(1)
-    except NoSuchElementException:
-        pass
+                try:
+                    article_el = wait.until(EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, '#TextContent, .read-content, .chapter-content, #content')
+                    ))
+                    article = article_el.get_attribute('innerHTML')
+                    f.write(process_text(article))
+                except TimeoutException:
+                    print(f"  警告: 无法获取章节内容，跳过")
+
+            except Exception as e:
+                print(f"  错误: {e}")
+                continue
+
+    print(f"完成: {safe_title}.txt")
+
 #退出驱动
 driver.quit()

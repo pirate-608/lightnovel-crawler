@@ -32,20 +32,39 @@ urls = [url.strip() for url in URL.split()]
 
 #驱动配置
 options = Options()
+# 反自动化检测
+options.add_argument('--disable-blink-features=AutomationControlled')
+options.add_experimental_option('excludeSwitches', ['enable-automation'])
+options.add_experimental_option('useAutomationExtension', False)
+options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0')
 # CI环境下使用headless模式
 if os.environ.get('CI'):
-    options.add_argument('--headless')
+    options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-gpu')
+    options.add_argument('--window-size=1920,1080')
 driver = webdriver.Edge(options=options)
-wait = WebDriverWait(driver, 15)
+# 移除 navigator.webdriver 标记
+driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+    'source': 'Object.defineProperty(navigator, "webdriver", {get: () => undefined})'
+})
+wait = WebDriverWait(driver, 30)
 
 
 for url in urls:
     driver.get(url)
+    time.sleep(3)
+    # 调试：打印实际加载的页面信息
+    print(f"Page URL: {driver.current_url}")
+    print(f"Page title: {driver.title}")
     #爬取标题
     book_title_xpath = '/html/body/div[2]/div[3]/div[1]/h1'
-    book_title = wait.until(EC.presence_of_element_located((By.XPATH, book_title_xpath))).text
+    try:
+        book_title = wait.until(EC.presence_of_element_located((By.XPATH, book_title_xpath))).text
+    except Exception:
+        print("Failed to find book title element. Page source (first 2000 chars):")
+        print(driver.page_source[:2000])
+        raise
     #处理文件名中的特殊字符
     safe_title = sanitize_filename(book_title)
     #没有可爬取内容时结束任务

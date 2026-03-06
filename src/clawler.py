@@ -1,11 +1,11 @@
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.common.by import By
-from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
 import random
 import time
 import re
+import os
 
 #处理爬取到的HTML文本
 def process_text(html_content):
@@ -29,10 +29,13 @@ URL = input("请输入小说的目录页网址(多个网址请用空格分隔):"
 urls = [url.strip() for url in URL.split()]
 
 #驱动配置
-driver_file_path = 'msedgedriver.exe'
-service = Service(driver_file_path)
 options = Options()
-driver = webdriver.Edge(service=service, options=options)
+# CI环境下使用headless模式
+if os.environ.get('CI'):
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-gpu')
+driver = webdriver.Edge(options=options)
 
 
 for url in urls:

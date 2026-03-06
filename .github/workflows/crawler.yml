@@ -44,31 +44,6 @@ jobs:
           choco install microsoft-edge -y
         }
 
-    - name: Download Edge WebDriver
-      shell: powershell
-      run: |
-        $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-        $edgeVersion = (Get-Item $edgePath).VersionInfo.ProductVersion
-        $majorVersion = $edgeVersion.Split(".")[0]
-        Write-Host "Edge version: $edgeVersion (Major: $majorVersion)"
-
-        $driverDir = "$env:GITHUB_WORKSPACE\webdriver"
-        mkdir -Force $driverDir
-
-        # 动态获取最新驱动下载链接
-        $driverVersionUrl = "https://msedgedriver.azureedge.net/LATEST_RELEASE_$majorVersion"
-        $driverVersion = Invoke-WebRequest -Uri $driverVersionUrl -UseBasicParsing | Select-Object -ExpandProperty Content
-        $driverZipUrl = "https://msedgedriver.azureedge.net/$driverVersion/edgedriver_win64.zip"
-
-        Write-Host "Downloading WebDriver from: $driverZipUrl"
-        Invoke-WebRequest -Uri $driverZipUrl -OutFile "$driverDir\msedgedriver.zip" -ErrorAction Stop
-
-        Expand-Archive -Path "$driverDir\msedgedriver.zip" -DestinationPath $driverDir -Force
-        Copy-Item -Path "$driverDir\msedgedriver.exe" -Destination "$env:GITHUB_WORKSPACE\msedgedriver.exe" -Force
-        Write-Host "Edge WebDriver installed to: $env:GITHUB_WORKSPACE\msedgedriver.exe"
-
-        echo "$env:GITHUB_WORKSPACE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
